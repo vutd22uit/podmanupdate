@@ -1,4 +1,4 @@
-name: CI/CD for Podman
+name: CI/CD for Podman on Localhost
 
 on:
   push:
@@ -7,17 +7,12 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build_and_deploy:
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-
-      - name: List files for debugging
-        run: |
-          echo "Current workspace: $GITHUB_WORKSPACE"
-          ls -la $GITHUB_WORKSPACE
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -31,12 +26,16 @@ jobs:
           pip3 install podman-compose
           echo 'export PATH=$PATH:~/.local/bin' >> $GITHUB_ENV
 
-      - name: Run podman-compose
+      - name: Build Docker image
         run: |
           cd $GITHUB_WORKSPACE
+          podman build -t localhost/todo-list-app:latest .
+
+      - name: Deploy to localhost
+        run: |
+          export PATH=$PATH:~/.local/bin
+          cd $GITHUB_WORKSPACE
           # Ensure the old containers are stopped and removed
-          podman-compose down --remove-orphans
-          # Pull the latest image
-          podman pull ***/todo-list-app:latest
+          podman-compose down --remove-orphans || true
           # Bring up the services with the latest image
           podman-compose up -d
