@@ -7,10 +7,9 @@ on:
     branches: [ main ]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
-     
+
     steps:
       - uses: actions/checkout@v2
 
@@ -29,9 +28,9 @@ jobs:
           sudo apt-get -y install podman
           podman --version
 
-      - name: Build the Docker image
+      - name: Build the Docker image for ARM
         run: |
-          podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+          podman build --platform linux/arm64 . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
           podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
 
       - name: Run Trivy vulnerability scanner
@@ -55,12 +54,14 @@ jobs:
   deploy:
     needs: build
     runs-on: self-hosted
+
     steps:
       - name: Deploy to local machine
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
-          cd ${{ github.workspace }} # Chuyển đến thư mục gốc của repository
-          podman-compose down
-          podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+          cd ${{ github.workspace }}
+        
+           # Ensure the old containers are stopped and removed
+          podman-compose down || true
           podman-compose up -d
