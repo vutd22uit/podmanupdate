@@ -28,9 +28,9 @@ jobs:
           sudo apt-get -y install podman
           podman --version
 
-      - name: Build the Docker image for ARM
+      - name: Build the Docker image 
         run: |
-          podman build --platform linux/arm64 . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+          podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
           podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
 
       - name: Run Trivy vulnerability scanner
