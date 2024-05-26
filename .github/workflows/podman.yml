@@ -2,14 +2,13 @@ name: Podman CI/CD for To Do List App
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build_and_test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
 
@@ -19,8 +18,7 @@ jobs:
           node-version: '16'
 
       - name: Install dependencies
-        run: |
-          yarn install
+        run: yarn install
 
       - name: Set up Podman
         run: |
@@ -29,7 +27,7 @@ jobs:
           podman --version
           podman-compose --version
 
-      - name: Build the Docker imag
+      - name: Build the Docker image
         run: |
           podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
           podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
@@ -73,7 +71,6 @@ jobs:
   deploy:
     needs: build_and_test
     runs-on: self-hosted
-
     steps:
       - name: Deploy to local machine
         env:
