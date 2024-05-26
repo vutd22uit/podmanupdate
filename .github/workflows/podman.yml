@@ -16,7 +16,8 @@ jobs:
 
       - name: List files for debugging
         run: |
-          ls -la /home/parallels/actions-runner/_work/podmanupdate/podmanupdate
+          echo "Current workspace: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
 
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -32,10 +33,10 @@ jobs:
 
       - name: Run podman-compose
         run: |
-          cd /home/parallels/actions-runner/_work/podmanupdate/podmanupdate
+          cd $GITHUB_WORKSPACE
           # Ensure the old containers are stopped and removed
           podman-compose down --remove-orphans
           # Pull the latest image
           podman pull ***/todo-list-app:latest
           # Bring up the services with the latest image
-          podman-compose -f /home/parallels/actions-runner/_work/podmanupdate/podmanupdate/docker-compose.yml up -d
+          podman-compose up -d
