@@ -60,6 +60,7 @@ jobs:
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
+          cd ${{ github.workspace }} # Chuyển đến thư mục gốc của repository
           podman-compose down
           podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
           podman-compose up -d
