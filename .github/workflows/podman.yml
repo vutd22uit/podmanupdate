@@ -1,90 +1,91 @@
 name: Podman CI/CD for To Do List App
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+ push:
+   branches: [main]
+ pull_request:
+   branches: [main]
 
 jobs:
-  build_and_test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '16'
-
-      - name: Install dependencies
-        run: yarn install
-
-      - name: Set up Podman
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install podman
-          podman --version
-
-      - name: Install Podman Compose
-        run: |
-          sudo apt-get install -y python3-pip
-          pip3 install podman-compose
-          podman-compose --version
-
-      - name: Build the Docker image
-        run: |
-          podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
-          podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
-
-      - name: Run Trivy vulnerability scanner
-        run: |
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-          trivy --version
-          trivy image docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
-
-      - name: Log in to Docker Hub
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          echo $DOCKER_PASSWORD | podman login docker.io -u $DOCKER_USERNAME --password-stdin
-
-      - name: Push to Docker Hub
-        run: |
-          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
-          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
-
-      - name: Test with podman-compose
-        run: |
-          cd ${{ github.workspace }}
-          # Stop any running services that might be using the required ports
-          sudo lsof -t -i :3000 | sudo xargs kill -9 || true
-          sudo lsof -t -i :6379 | sudo xargs kill -9 || true
-          # Ensure the old containers are stopped and removed
-          podman-compose down || true
-          # Bring up the services to run tests
-          podman-compose up -d
-          # Wait for the services to be ready
-          sleep 30
-          # Optionally run some tests against the services
-          # For example, you can use curl to check if the service is running
-          curl http://localhost:3000 || true
-          # Stop the services after tests
-          podman-compose down
-
-  deploy:
-    needs: build_and_test
-    runs-on: self-hosted
-    steps:
-      - name: Deploy to local machine
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        run: |
-          cd ${{ github.workspace }}
-          # Ensure the old containers are stopped and removed
-          podman-compose down || true
-          # Pull the latest image
-          podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
-          # Bring up the services with the latest image
-          podman-compose up -d
+ build_and_test:
+   runs-on: ubuntu-latest
+   
+   steps:
+   - uses: actions/checkout@v2
+   
+   - name: Set up Node.js
+     uses: actions/setup-node@v2
+     with:
+       node-version: '16'
+       
+   - name: Install dependencies
+     run: yarn install
+     
+   - name: Set up Podman
+     run: |
+       sudo apt-get update
+       sudo apt-get -y install podman
+       podman --version
+       
+   - name: Install Podman Compose
+     run: |
+       sudo apt-get install -y python3-pip
+       pip3 install podman-compose
+       echo "$(pip3 show -f podman-compose | grep Location | cut -d' ' -f2)/bin" >> $GITHUB_PATH
+       podman-compose --version
+       
+   - name: Build the Podman image
+     run: |
+       podman build . --file Dockerfile --tag ${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+       podman tag ${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} ${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+       
+   - name: Run Trivy vulnerability scanner
+     run: |
+       curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+       trivy --version
+       trivy image ${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+       
+   - name: Log in to Docker Hub
+     env:
+       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+     run: |
+       echo $DOCKER_PASSWORD | podman login -u $DOCKER_USERNAME --password-stdin
+       
+   - name: Push to Docker Hub
+     run: |
+       podman push ${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+       podman push ${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+       
+   - name: Test with podman-compose
+     run: |
+       cd ${{ github.workspace }}
+       # Stop any running services that might be using the required ports
+       sudo lsof -t -i :3000 | sudo xargs --no-run-if-empty kill -9
+       sudo lsof -t -i :6379 | sudo xargs --no-run-if-empty kill -9
+       # Ensure the old containers are stopped and removed
+       podman-compose down --remove-orphans
+       # Bring up the services to run tests
+       podman-compose up -d
+       # Wait for the services to be ready
+       sleep 30
+       # Optionally run some tests against the services
+       # For example, you can use curl to check if the service is running
+       curl http://localhost:3000 || true
+       # Stop the services after tests
+       podman-compose down
+       
+ deploy:
+   needs: build_and_test
+   runs-on: self-hosted
+   
+   steps:
+   - name: Deploy to local machine
+     run: |
+       cd ${{ github.workspace }}
+       # Ensure the old containers are stopped and removed
+       podman-compose down --remove-orphans
+       # Pull the latest image
+       podman pull ${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+       # Bring up the services with the latest image
+       podman-compose up -d
