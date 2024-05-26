@@ -14,17 +14,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python 3.8
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.8'
-
-      - name: Install podman and podman-compose
+      - name: Set up Environment Variables
         run: |
-          sudo apt-get update
-          sudo apt-get -y install podman python3-pip
-          pip3 install podman-compose
           echo 'export PATH=$PATH:~/.local/bin' >> $GITHUB_ENV
+
+      - name: List files for debugging
+        run: |
+          echo "Current workspace: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
 
       - name: Build Docker image
         run: |
