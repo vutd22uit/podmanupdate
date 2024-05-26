@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build_and_test:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,10 +25,11 @@ jobs:
       - name: Set up Podman
         run: |
           sudo apt-get update
-          sudo apt-get -y install podman
+          sudo apt-get -y install podman podman-compose
           podman --version
+          podman-compose --version
 
-      - name: Build the Docker image 
+      - name: Build the Docker imag
         run: |
           podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
           podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
@@ -51,8 +52,26 @@ jobs:
           podman push docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
           podman push docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
 
+      - name: Test with podman-compose
+        run: |
+          cd ${{ github.workspace }}
+          # Stop any running services that might be using the required ports
+          sudo lsof -t -i :3000 | sudo xargs kill -9 || true
+          sudo lsof -t -i :6379 | sudo xargs kill -9 || true
+          # Ensure the old containers are stopped and removed
+          podman-compose down || true
+          # Bring up the services to run tests
+          podman-compose up -d
+          # Wait for the services to be ready
+          sleep 30
+          # Optionally run some tests against the services
+          # For example, you can use curl to check if the service is running
+          curl http://localhost:3000 || true
+          # Stop the services after tests
+          podman-compose down
+
   deploy:
-    needs: build
+    needs: build_and_test
     runs-on: self-hosted
 
     steps:
@@ -61,7 +80,9 @@ jobs:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         run: |
           cd ${{ github.workspace }}
-        
-           # Ensure the old containers are stopped and removed
+          # Ensure the old containers are stopped and removed
           podman-compose down || true
+          # Pull the latest image
+          podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+          # Bring up the services with the latest image
           podman-compose up -d
