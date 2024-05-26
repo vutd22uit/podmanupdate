@@ -23,8 +23,13 @@ jobs:
       - name: Set up Podman
         run: |
           sudo apt-get update
-          sudo apt-get -y install podman podman-compose
+          sudo apt-get -y install podman
           podman --version
+
+      - name: Install Podman Compose
+        run: |
+          sudo apt-get install -y python3-pip
+          pip3 install podman-compose
           podman-compose --version
 
       - name: Build the Docker image
