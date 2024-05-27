@@ -66,11 +66,13 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_PRIVATE_KEY }}
           script: |
+            # Update hệ thống và cài đặt Podman và Podman Compose
             sudo apt-get update
             sudo apt-get install -y podman podman-compose
 
-            # Di chuyển vào thư mục dự án
-            cd /home/${{ secrets.EC2_USERNAME }}/project
+            # Tạo thư mục dự án nếu chưa tồn tại
+            mkdir -p /home/ubuntu/project
+            cd /home/ubuntu/project
 
             # Clone hoặc pull repository nếu chưa có
             if [ ! -d "$GITHUB_WORKSPACE" ]; then
@@ -78,6 +80,12 @@ jobs:
             else
               cd $GITHUB_WORKSPACE
               git pull
+            fi
+
+            # Kiểm tra xem file compose.yaml hoặc docker-compose.yml có tồn tại không
+            if [ ! -f "docker-compose.yml" ] && [ ! -f "compose.yaml" ]; then
+              echo "No compose.yaml or docker-compose.yml found!"
+              exit 1
             fi
 
             # Dừng và xoá các container cũ
