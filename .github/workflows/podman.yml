@@ -1,38 +1,90 @@
-name: CI/CD for Podman on Localhost
+name: Podman CI/CD for To Do List App
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
-  build_and_deploy:
-    runs-on: self-hosted
+  build:
+    runs-on: ubuntu-latest
+     
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: |
+          yarn install
+
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install podman
+          podman --version
+
+      - name: Build the Docker image
+        run: |
+          podman build . --file Dockerfile --tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+          podman tag docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7} docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+
+      - name: Run Trivy vulnerability scanner
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          trivy --version
+          trivy image docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo $DOCKER_PASSWORD | podman login docker.io -u $DOCKER_USERNAME --password-stdin
+
+      - name: Push to Docker Hub
+        run: |
+          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:${GITHUB_SHA::7}
+          podman push docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Environment Variables
-        run: |
-          echo 'export PATH=$PATH:~/.local/bin' >> $GITHUB_ENV
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            sudo apt-get update
+            sudo apt-get install -y podman podman-compose
 
-      - name: List files for debugging
-        run: |
-          echo "Current workspace: $GITHUB_WORKSPACE"
-          ls -la $GITHUB_WORKSPACE
+            # Di chuyển vào thư mục dự án
+            cd /home/${{ secrets.EC2_USERNAME }}/project
 
-      - name: Build Docker image
-        run: |
-          cd $GITHUB_WORKSPACE
-          podman build -t localhost/todo-list-app:latest .
+            # Clone hoặc pull repository nếu chưa có
+            if [ ! -d "$GITHUB_WORKSPACE" ]; then
+              git clone https://github.com/${{ github.repository }} $GITHUB_WORKSPACE
+            else
+              cd $GITHUB_WORKSPACE
+              git pull
+            fi
 
-      - name: Deploy to localhost
-        run: |
-          export PATH=$PATH:~/.local/bin
-          cd $GITHUB_WORKSPACE
-          # Ensure the old containers are stopped and removed
-          podman-compose down --remove-orphans || true
-          # Bring up the services with the latest image
-          podman-compose up -d
+            # Dừng và xoá các container cũ
+            podman-compose down --remove-orphans || true
+
+            # Kéo hình ảnh mới từ Docker Hub
+            podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+
+            # Khởi động lại các dịch vụ với hình ảnh mới nhất
+            podman-compose up -d
