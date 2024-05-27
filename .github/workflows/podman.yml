@@ -75,12 +75,15 @@ jobs:
             cd /home/ubuntu/project
 
             # Clone hoặc pull repository nếu chưa có
-            if [ ! -d "$GITHUB_WORKSPACE" ]; then
-              git clone https://github.com/${{ github.repository }} $GITHUB_WORKSPACE
+            if [ ! -d "podmanupdate" ]; then
+              git clone https://github.com/${{ github.repository }} podmanupdate
             else
-              cd $GITHUB_WORKSPACE
+              cd podmanupdate
               git pull
             fi
+
+            # Chuyển vào thư mục dự án
+            cd podmanupdate
 
             # Kiểm tra xem file compose.yaml hoặc docker-compose.yml có tồn tại không
             if [ ! -f "docker-compose.yml" ] && [ ! -f "compose.yaml" ]; then
