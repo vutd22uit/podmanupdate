@@ -1,35 +1,84 @@
-version: '3.8'
+name: Podman CI/CD for To Do List App
 
-services:
-  app:
-    build: .
-    image: localhost/app:latest
-    ports:
-      - "3000:3000"
-    environment:
-      MYSQL_HOST: mysql
-      MYSQL_USER: root
-      MYSQL_PASSWORD: secret
-      MYSQL_DB: todos
-      REDIS_HOST: redis
-    volumes:
-      - .:/app
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
-  mysql:
-    image: docker.io/library/mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: secret
-      MYSQL_DATABASE: todos
-    volumes:
-      - todo-mysql-data:/var/lib/mysql
-
-  redis:
-    image: docker.io/library/redis:latest
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-
-volumes:
-  todo-mysql-data:
-  redis-data:
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v2
+    
+      - name: Set up Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install podman
+          podman --version
+        
+      - name: Log in to Docker Hub
+        run: |
+          echo ${{ secrets.DOCKER_PASSWORD }} | podman login docker.io -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        
+      - name: Build and push images
+        run: |
+          podman-compose -f docker-compose.yml build
+          podman-compose -f docker-compose.yml push
+        
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            # Cập nhật hệ thống và cài đặt Podman
+            sudo apt-get update
+            sudo apt-get install -y podman
+          
+            # Tạo thư mục dự án nếu chưa tồn tại
+            mkdir -p /home/ubuntu/project
+            cd /home/ubuntu/project
+          
+            # Tạo file docker-compose.yml
+            cat > docker-compose.yml <<EOF
+            version: '3.8'
+            services:
+              app:
+                image: docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-app:latest
+                ports:
+                  - "3000:3000"
+                environment:
+                  MYSQL_HOST: mysql
+                  MYSQL_USER: root
+                  MYSQL_PASSWORD: secret
+                  MYSQL_DB: todos
+                  REDIS_HOST: redis
+              mysql:
+                image: docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-mysql:latest
+                environment:
+                  MYSQL_ROOT_PASSWORD: secret
+                  MYSQL_DATABASE: todos
+                volumes:
+                  - todo-mysql-data:/var/lib/mysql
+              redis:
+                image: docker.io/${{ secrets.DOCKER_USERNAME }}/todo-list-redis:latest
+                ports:
+                  - "6379:6379"
+                volumes:
+                  - redis-data:/data
+                
+            volumes:
+              todo-mysql-data:
+              redis-data:
+            EOF
+          
+            # Kéo các image mới nhất
+            podman-compose -f docker-compose.yml pull
+          
+            # Chạy các container
+            podman-compose -f docker-compose.yml down
+            podman-compose -f docker-compose.yml up -d
