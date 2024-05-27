@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-     
+
     steps:
       - uses: actions/checkout@v2
 
@@ -90,6 +90,9 @@ jobs:
               echo "No compose.yaml or docker-compose.yml found!"
               exit 1
             fi
+
+            # Thêm cấu hình cho unqualified-search registries
+            sudo sh -c 'echo "[[registry]]\nprefix = \"\"\ninsecure = false\nblocked = false\nlocation = \"docker.io\"\n' >> /etc/containers/registries.conf
 
             # Dừng và xoá các container cũ
             podman-compose down --remove-orphans || true
