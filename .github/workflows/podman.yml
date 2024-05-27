@@ -60,6 +60,9 @@ jobs:
             podman stop app mysql redis || true
             podman rm app mysql redis || true
 
+            # Giải phóng cổng 6379 nếu đang sử dụng
+            sudo fuser -k 6379/tcp || true
+
             # Xóa các volumes cũ nếu có
             podman volume rm todo-mysql-data redis-data || true
 
