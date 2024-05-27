@@ -16,7 +16,8 @@ jobs:
       - name: Set up Podman
         run: |
           sudo apt-get update
-          sudo apt-get -y install podman podman-compose
+          sudo apt-get -y install podman python3-pip
+          pip3 install podman-compose
           podman --version
           podman-compose --version
         
@@ -38,7 +39,8 @@ jobs:
           script: |
             # Cập nhật hệ thống và cài đặt Podman
             sudo apt-get update
-            sudo apt-get install -y podman podman-compose
+            sudo apt-get install -y podman python3-pip
+            pip3 install podman-compose
           
             # Tạo thư mục dự án nếu chưa tồn tại
             mkdir -p /home/ubuntu/project
